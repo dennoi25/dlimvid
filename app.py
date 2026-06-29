@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 LINE_TOKEN = os.environ.get('LINE_TOKEN')
 FOLDER_NAME = 'LINE_Media'
-ROOT_FOLDER_ID = '1ZiIzxPVRCuXTSDw9ufgRh5XyZyfxqDgE'  # ← ใส่ Folder ID จริงตรงนี้
+ROOT_FOLDER_ID = '1QAPqQ_OxF5waXoiy4F9ykJkbcV50zvKw'  # ← ใส่ Folder ID จริงตรงนี้
 DRIVE_FOLDER_URL = f'https://drive.google.com/drive/folders/{ROOT_FOLDER_ID}'
 
 # ====== Google Drive ======
