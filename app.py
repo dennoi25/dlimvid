@@ -8,7 +8,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-LINE_TOKEN    = os.environ.get('LINE_TOKEN')
+LINE_TOKEN     = os.environ.get('LINE_TOKEN')
 ROOT_FOLDER_ID = os.environ.get('ROOT_FOLDER_ID', '1QAPqQ_OxF5waXoiy4F9ykJkbcV50zvKw')
 DRIVE_FOLDER_URL = f'https://drive.google.com/drive/folders/{ROOT_FOLDER_ID}'
 
@@ -64,7 +64,11 @@ def save_media(message_id, user_id, media_type, source_type):
 
     bkk       = pytz.timezone('Asia/Bangkok')
     now       = datetime.now(bkk)
+
+    # โฟลเดอร์แยกตาม ปี → เดือน → วัน
+    year_str  = now.strftime('%Y')
     month_str = now.strftime('%Y-%m')
+    day_str   = now.strftime('%Y-%m-%d')
     date_str  = now.strftime('%Y%m%d_%H%M%S')
     uid_short = (user_id or 'unknown')[-4:]
 
@@ -75,23 +79,27 @@ def save_media(message_id, user_id, media_type, source_type):
 
     try:
         service  = get_drive_service()
+
+        # โครงสร้าง: ROOT → group/direct → images/videos → ปี → เดือน → วัน
         src_id   = get_or_create_folder(service, source_folder, ROOT_FOLDER_ID)
         type_id  = get_or_create_folder(service, media_type + 's', src_id)
-        month_id = get_or_create_folder(service, month_str, type_id)
+        year_id  = get_or_create_folder(service, year_str, type_id)
+        month_id = get_or_create_folder(service, month_str, year_id)
+        day_id   = get_or_create_folder(service, day_str, month_id)
 
         media = MediaIoBaseUpload(io.BytesIO(res.content), mimetype=mime, resumable=True)
         file = service.files().create(
-            body={'name': filename, 'parents': [month_id]},
+            body={'name': filename, 'parents': [day_id]},
             media_body=media,
             fields='id, webViewLink'
         ).execute()
 
         print(f'Saved: {filename} -> {file.get("webViewLink")}')
-        return file.get('webViewLink')
+        return file.get('webViewLink'), filename
 
     except Exception as e:
         print(f'Drive error: {e}')
-        return None
+        return None, None
 
 
 # ====== LINE Reply ======
@@ -130,12 +138,20 @@ def webhook():
         reply_token = event.get('replyToken')
 
         if msg['type'] == 'image':
-            file_url = save_media(msg['id'], uid, 'image', source_type)
+            file_url, filename = save_media(msg['id'], uid, 'image', source_type)
+            # แจ้งหลังบันทึกเสร็จเฉพาะแชท 1:1
             if source_type == 'user' and reply_token:
                 if file_url:
+                    bkk = pytz.timezone('Asia/Bangkok')
+                    now = datetime.now(bkk)
                     send_reply(reply_token, [{
                         'type': 'text',
-                        'text': f"✅ บันทึกรูปแล้วครับ\n📁 ดูได้ที่: {file_url}"
+                        'text': (
+                            f"✅ บันทึกรูปเสร็จแล้วครับ\n"
+                            f"📅 วันที่: {now.strftime('%d/%m/%Y %H:%M:%S')}\n"
+                            f"📄 ชื่อไฟล์: {filename}\n"
+                            f"📁 ดูได้ที่: {file_url}"
+                        )
                     }])
                 else:
                     send_reply(reply_token, [{
@@ -144,12 +160,19 @@ def webhook():
                     }])
 
         elif msg['type'] == 'video':
-            file_url = save_media(msg['id'], uid, 'video', source_type)
+            file_url, filename = save_media(msg['id'], uid, 'video', source_type)
             if source_type == 'user' and reply_token:
                 if file_url:
+                    bkk = pytz.timezone('Asia/Bangkok')
+                    now = datetime.now(bkk)
                     send_reply(reply_token, [{
                         'type': 'text',
-                        'text': f"✅ บันทึกวิดีโอแล้วครับ\n📁 ดูได้ที่: {file_url}"
+                        'text': (
+                            f"✅ บันทึกวิดีโอเสร็จแล้วครับ\n"
+                            f"📅 วันที่: {now.strftime('%d/%m/%Y %H:%M:%S')}\n"
+                            f"📄 ชื่อไฟล์: {filename}\n"
+                            f"📁 ดูได้ที่: {file_url}"
+                        )
                     }])
                 else:
                     send_reply(reply_token, [{
@@ -172,7 +195,7 @@ def webhook():
                         "ส่งรูป/วิดีโอในกลุ่ม\n"
                         "→ บันทึกขึ้น Drive อัตโนมัติ\n\n"
                         "แชท 1:1 กับ Bot แล้วส่งรูป/วิดีโอ\n"
-                        "→ บันทึกและรับลิงก์กลับทันที\n\n"
+                        "→ บันทึกเสร็จแล้วรับลิงก์กลับทันที\n\n"
                         "/album → ลิงก์ Google Drive\n"
                         "/help  → ดูคำสั่งทั้งหมด"
                     )
