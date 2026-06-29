@@ -13,9 +13,8 @@ DRIVE_FOLDER_URL = 'https://drive.google.com/drive/u/0/folders/1ZiIzxPVRCuXTSDw9
 
 # ====== Google Drive ======
 def get_drive_service():
-    creds_dict = json.loads(os.environ.get('GOOGLE_CREDENTIALS'))
-    creds = service_account.Credentials.from_service_account_info(
-        creds_dict,
+    creds = service_account.Credentials.from_service_account_file(
+        '/etc/secrets/credentials.json',
         scopes=['https://www.googleapis.com/auth/drive']
     )
     return build('drive', 'v3', credentials=creds)
