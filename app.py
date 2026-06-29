@@ -9,7 +9,8 @@ app = Flask(__name__)
 
 LINE_TOKEN = os.environ.get('LINE_TOKEN')
 FOLDER_NAME = 'LINE_Media'
-DRIVE_FOLDER_URL = 'https://drive.google.com/drive/u/0/folders/1ZiIzxPVRCuXTSDw9ufgRh5XyZyfxqDgE'  # ← เปลี่ยนเป็นลิงก์จริง
+ROOT_FOLDER_ID = '1ZiIzxPVRCuXTSDw9ufgRh5XyZyfxqDgE'  # ← ใส่ Folder ID จริงตรงนี้
+DRIVE_FOLDER_URL = f'https://drive.google.com/drive/folders/{ROOT_FOLDER_ID}'
 
 # ====== Google Drive ======
 def get_drive_service():
@@ -19,18 +20,23 @@ def get_drive_service():
     )
     return build('drive', 'v3', credentials=creds)
 
-def get_or_create_folder(service, name, parent_id=None):
-    q = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    if parent_id:
-        q += f" and '{parent_id}' in parents"
-    res = service.files().list(q=q, fields='files(id)').execute()
+def get_or_create_folder(service, name, parent_id):
+    q = (f"name='{name}' and "
+         f"mimeType='application/vnd.google-apps.folder' and "
+         f"'{parent_id}' in parents and trashed=false")
+    res = service.files().list(q=q, fields='files(id)',
+                               supportsAllDrives=True,
+                               includeItemsFromAllDrives=True).execute()
     files = res.get('files', [])
     if files:
         return files[0]['id']
-    meta = {'name': name, 'mimeType': 'application/vnd.google-apps.folder'}
-    if parent_id:
-        meta['parents'] = [parent_id]
-    folder = service.files().create(body=meta, fields='id').execute()
+    meta = {
+        'name': name,
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [parent_id]
+    }
+    folder = service.files().create(body=meta, fields='id',
+                                    supportsAllDrives=True).execute()
     return folder['id']
 
 def save_media(message_id, user_id, media_type, source_type):
@@ -53,8 +59,7 @@ def save_media(message_id, user_id, media_type, source_type):
     filename = f"{media_type.upper()}_{date_str}_{uid_short}.{ext}"
 
     service = get_drive_service()
-    root_id  = get_or_create_folder(service, FOLDER_NAME)
-    src_id   = get_or_create_folder(service, source_folder, root_id)
+    src_id   = get_or_create_folder(service, source_folder, ROOT_FOLDER_ID)
     type_id  = get_or_create_folder(service, media_type + 's', src_id)
     month_id = get_or_create_folder(service, month_str, type_id)
 
@@ -62,7 +67,8 @@ def save_media(message_id, user_id, media_type, source_type):
     file = service.files().create(
         body={'name': filename, 'parents': [month_id]},
         media_body=media,
-        fields='id, webViewLink'
+        fields='id, webViewLink',
+        supportsAllDrives=True
     ).execute()
 
     print(f'Saved: {filename}')
@@ -111,13 +117,11 @@ def webhook():
 
         elif msg['type'] == 'text':
             text = msg['text'].strip()
-
             if text == '/album':
                 send_reply(reply_token, [{
                     'type': 'text',
                     'text': f"📁 Album กลุ่มทั้งหมดอยู่ที่นี่ครับ\n{DRIVE_FOLDER_URL}"
                 }])
-
             elif text == '/help':
                 send_reply(reply_token, [{
                     'type': 'text',
