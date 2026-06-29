@@ -5,6 +5,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 import io, pytz
+import json
 
 app = Flask(__name__)
 
@@ -12,8 +13,10 @@ LINE_TOKEN = os.environ.get('LINE_TOKEN')
 FOLDER_NAME = 'LINE_Media'
 
 def get_drive_service():
-    creds = service_account.Credentials.from_service_account_file(
-        'credentials.json',
+    creds_json = os.environ.get('GOOGLE_CREDENTIALS')
+    creds_dict = json.loads(creds_json)
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
         scopes=['https://www.googleapis.com/auth/drive']
     )
     return build('drive', 'v3', credentials=creds)
