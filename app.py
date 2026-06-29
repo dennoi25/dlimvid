@@ -6,7 +6,8 @@ from googleapiclient.http import MediaIoBaseUpload
 from datetime import datetime
 
 app = Flask(__name__)
-
+ROOT_FOLDER_ID = 'SHARED_DRIVE_FOLDER_ID'  # ← ใส่ ID จาก Shared Drive
+IS_SHARED_DRIVE = True
 LINE_TOKEN = os.environ.get('LINE_TOKEN')
 FOLDER_NAME = 'LINE_Media'
 ROOT_FOLDER_ID = '1QAPqQ_OxF5waXoiy4F9ykJkbcV50zvKw'  # ← ใส่ Folder ID จริงตรงนี้
@@ -24,9 +25,13 @@ def get_or_create_folder(service, name, parent_id):
     q = (f"name='{name}' and "
          f"mimeType='application/vnd.google-apps.folder' and "
          f"'{parent_id}' in parents and trashed=false")
-    res = service.files().list(q=q, fields='files(id)',
-                               supportsAllDrives=True,
-                               includeItemsFromAllDrives=True).execute()
+    res = service.files().list(
+        q=q,
+        fields='files(id)',
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora='allDrives'
+    ).execute()
     files = res.get('files', [])
     if files:
         return files[0]['id']
@@ -35,8 +40,11 @@ def get_or_create_folder(service, name, parent_id):
         'mimeType': 'application/vnd.google-apps.folder',
         'parents': [parent_id]
     }
-    folder = service.files().create(body=meta, fields='id',
-                                    supportsAllDrives=True).execute()
+    folder = service.files().create(
+        body=meta,
+        fields='id',
+        supportsAllDrives=True
+    ).execute()
     return folder['id']
 
 def save_media(message_id, user_id, media_type, source_type):
@@ -53,7 +61,6 @@ def save_media(message_id, user_id, media_type, source_type):
     uid_short = (user_id or 'unknown')[-4:]
 
     source_folder = 'group' if source_type in ['group', 'room'] else 'direct'
-
     ext  = 'jpg' if media_type == 'image' else 'mp4'
     mime = 'image/jpeg' if media_type == 'image' else 'video/mp4'
     filename = f"{media_type.upper()}_{date_str}_{uid_short}.{ext}"
@@ -73,7 +80,6 @@ def save_media(message_id, user_id, media_type, source_type):
 
     print(f'Saved: {filename}')
     return file.get('webViewLink')
-
 # ====== LINE Reply ======
 def send_reply(reply_token, messages):
     requests.post(
